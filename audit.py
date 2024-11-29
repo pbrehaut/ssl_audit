@@ -3,6 +3,7 @@ import json
 import getpass
 import urllib3
 from collections import defaultdict
+import subprocess
 
 # Disable SSL warnings
 urllib3.disable_warnings()
@@ -32,6 +33,26 @@ def get_virtual_servers(token):
         virtuals = response.json()['items']
         return [v for v in virtuals if v.get('enabled')]
     return []
+
+
+def get_cipher_details(cipher_string):
+    """Execute tmm --clientciphers command and return output"""
+    try:
+        # Replace ! with \! but use raw string to avoid double escaping
+        escaped_ciphers = cipher_string.replace('!', r'\!')
+
+        # Use shell=True and pass the complete command as a string to preserve the escaping
+        cmd = 'tmm --clientciphers {0}'.format(escaped_ciphers)
+        print(cmd)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        output, error = process.communicate()
+
+        if process.returncode == 0:
+            return output.strip()
+        else:
+            return "Error running tmm command: {0}".format(error)
+    except Exception as e:
+        return "Failed to execute tmm command: {0}".format(str(e))
 
 
 def get_ssl_profiles(token, virtual_server):
@@ -91,8 +112,13 @@ def get_ssl_profile_details(token, profile_name, profile_type):
             options = [x for x in options if 'tls' in x.lower()]
             options = ' '.join(options)
 
+            # Get cipher details for client profiles
+            ciphers = profile_data.get('ciphers', 'DEFAULT')
+            cipher_details = get_cipher_details(ciphers) if profile_type == 'client' else None
+
             details = {
-                'ciphers': profile_data.get('ciphers', 'DEFAULT'),
+                'ciphers': ciphers,
+                'cipher_details': cipher_details,
                 'options': options,
                 'cert': profile_data.get('cert', 'None'),
                 'key': profile_data.get('key', 'None'),
@@ -134,6 +160,11 @@ def generate_report(data):
                         f.write("  Certificate: {0}\n".format(profile['details']['cert']))
                         f.write("  Key: {0}\n".format(profile['details']['key']))
                         f.write("  Chain: {0}\n".format(profile['details']['chain']))
+                        if profile['details']['cipher_details']:
+                            f.write("\n  Cipher Details:\n")
+                            # Indent each line of cipher details output
+                            for line in profile['details']['cipher_details'].split('\n'):
+                                f.write("    {0}\n".format(line))
                     else:
                         f.write("  Unable to retrieve profile details\n")
 
