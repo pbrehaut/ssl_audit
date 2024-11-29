@@ -68,7 +68,7 @@ def get_ssl_profiles(token, virtual_server):
                     print("DEBUG: Profile name: {0}".format(profile_name))
                     print("DEBUG: Profile full path: {0}".format(profile_full_path))
 
-                    # Only process clientside profiles
+                    # Process clientside profiles
                     if profile_context == 'clientside':
                         # Try to get the profile details from client-ssl endpoint
                         profile_path = profile_full_path.replace('/Common/', '')
@@ -87,8 +87,26 @@ def get_ssl_profiles(token, virtual_server):
                                     check_response.status_code))
                         except Exception as e:
                             print("DEBUG: Error checking profile type: {0}".format(str(e)))
-                    else:
-                        print("DEBUG: Profile is not clientside")
+                    # Process serverside profiles
+                    elif profile_context == 'serverside':
+                        # Try to get the profile details from server-ssl endpoint
+                        profile_path = profile_full_path.replace('/Common/', '')
+                        check_url = "https://localhost/mgmt/tm/ltm/profile/server-ssl/~Common~{0}".format(profile_path)
+
+                        print("DEBUG: Checking if server SSL profile at URL: {0}".format(check_url))
+                        try:
+                            check_response = requests.get(check_url, headers=headers, verify=False)
+                            print("DEBUG: Profile check status: {0}".format(check_response.status_code))
+
+                            if check_response.status_code == 200:
+                                print("DEBUG: Found SSL profile: {0}".format(profile_full_path))
+                                profiles.append(profile_full_path)
+                            else:
+                                print("DEBUG: Not a server-ssl profile (status code: {0})".format(
+                                    check_response.status_code))
+                        except Exception as e:
+                            print("DEBUG: Error checking profile type: {0}".format(str(e)))
+
             else:
                 print("DEBUG: No 'items' found in profile_data")
 
