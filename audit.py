@@ -7,6 +7,7 @@ from collections import defaultdict
 # Disable SSL warnings
 urllib3.disable_warnings()
 
+
 def get_auth_token(username, password):
     """Authenticate with F5 and get token"""
     url = "https://localhost/mgmt/shared/authn/login"
@@ -21,6 +22,7 @@ def get_auth_token(username, password):
     else:
         raise Exception("Authentication failed")
 
+
 def get_virtual_servers(token):
     """Get all enabled virtual servers"""
     url = "https://localhost/mgmt/tm/ltm/virtual"
@@ -33,113 +35,57 @@ def get_virtual_servers(token):
 
 
 def get_ssl_profiles(token, virtual_server):
-    """Get SSL profiles linked to a virtual server"""
-    profiles = []
+    """Get SSL profiles (both client and server) linked to a virtual server"""
+    profiles = {'client': [], 'server': []}
     vs_full_path = virtual_server['fullPath']
-
-    print("\nDEBUG: Processing virtual server fullPath: {0}".format(vs_full_path))
-
-    # Remove the leading /Common/ from the path if it exists
     vs_path = vs_full_path.replace('/Common/', '')
 
     url = "https://localhost/mgmt/tm/ltm/virtual/~Common~{0}/profiles".format(vs_path)
     headers = {'X-F5-Auth-Token': token}
 
-    print("\nDEBUG: Requesting profiles from URL: {0}".format(url))
-
     try:
         response = requests.get(url, headers=headers, verify=False)
-        print("DEBUG: Profile request status code: {0}".format(response.status_code))
-
         if response.status_code == 200:
             profile_data = response.json()
 
             if 'items' in profile_data:
-                print("\nDEBUG: Found {0} profile items".format(len(profile_data['items'])))
                 for profile in profile_data['items']:
-                    print("\nDEBUG: Processing profile:")
-                    print(json.dumps(profile, indent=2))
-
                     profile_context = profile.get('context')
-                    profile_name = profile.get('name', '')
                     profile_full_path = profile.get('fullPath', '')
+                    profile_path = profile_full_path.replace('/Common/', '')
 
-                    print("DEBUG: Profile context: {0}".format(profile_context))
-                    print("DEBUG: Profile name: {0}".format(profile_name))
-                    print("DEBUG: Profile full path: {0}".format(profile_full_path))
-
-                    # Process clientside profiles
                     if profile_context == 'clientside':
-                        # Try to get the profile details from client-ssl endpoint
-                        profile_path = profile_full_path.replace('/Common/', '')
                         check_url = "https://localhost/mgmt/tm/ltm/profile/client-ssl/~Common~{0}".format(profile_path)
+                        check_response = requests.get(check_url, headers=headers, verify=False)
+                        if check_response.status_code == 200:
+                            profiles['client'].append(profile_full_path)
 
-                        print("DEBUG: Checking if client SSL profile at URL: {0}".format(check_url))
-                        try:
-                            check_response = requests.get(check_url, headers=headers, verify=False)
-                            print("DEBUG: Profile check status: {0}".format(check_response.status_code))
-
-                            if check_response.status_code == 200:
-                                print("DEBUG: Found SSL profile: {0}".format(profile_full_path))
-                                profiles.append(profile_full_path)
-                            else:
-                                print("DEBUG: Not a client-ssl profile (status code: {0})".format(
-                                    check_response.status_code))
-                        except Exception as e:
-                            print("DEBUG: Error checking profile type: {0}".format(str(e)))
-                    # Process serverside profiles
                     elif profile_context == 'serverside':
-                        # Try to get the profile details from server-ssl endpoint
-                        profile_path = profile_full_path.replace('/Common/', '')
                         check_url = "https://localhost/mgmt/tm/ltm/profile/server-ssl/~Common~{0}".format(profile_path)
+                        check_response = requests.get(check_url, headers=headers, verify=False)
+                        if check_response.status_code == 200:
+                            profiles['server'].append(profile_full_path)
 
-                        print("DEBUG: Checking if server SSL profile at URL: {0}".format(check_url))
-                        try:
-                            check_response = requests.get(check_url, headers=headers, verify=False)
-                            print("DEBUG: Profile check status: {0}".format(check_response.status_code))
-
-                            if check_response.status_code == 200:
-                                print("DEBUG: Found SSL profile: {0}".format(profile_full_path))
-                                profiles.append(profile_full_path)
-                            else:
-                                print("DEBUG: Not a server-ssl profile (status code: {0})".format(
-                                    check_response.status_code))
-                        except Exception as e:
-                            print("DEBUG: Error checking profile type: {0}".format(str(e)))
-
-            else:
-                print("DEBUG: No 'items' found in profile_data")
-
-        print("\nDEBUG: Total SSL profiles found: {0}".format(len(profiles)))
         return profiles
 
     except Exception as e:
-        print("DEBUG: Exception in get_ssl_profiles:")
-        print(str(e))
-        return []
+        print("Error getting SSL profiles: {0}".format(str(e)))
+        return {'client': [], 'server': []}
 
 
-def get_ssl_profile_details(token, profile_name):
+def get_ssl_profile_details(token, profile_name, profile_type):
     """Get cipher and SSL version information for a profile"""
-    print("\nDEBUG: Getting details for SSL profile: {0}".format(profile_name))
-
-    # Remove the leading /Common/ if it exists
     profile_path = profile_name.replace('/Common/', '')
-    url = "https://localhost/mgmt/tm/ltm/profile/client-ssl/~Common~{0}".format(profile_path)
-    headers = {'X-F5-Auth-Token': token}
 
-    print("DEBUG: Requesting profile details from URL: {0}".format(url))
+    # Set the appropriate endpoint based on profile type
+    endpoint = 'client-ssl' if profile_type == 'client' else 'server-ssl'
+    url = "https://localhost/mgmt/tm/ltm/profile/{0}/~Common~{1}".format(endpoint, profile_path)
+    headers = {'X-F5-Auth-Token': token}
 
     try:
         response = requests.get(url, headers=headers, verify=False)
-        print("DEBUG: Profile details status code: {0}".format(response.status_code))
-        print("DEBUG: Profile details raw response:")
-        print(response.text)
-
         if response.status_code == 200:
             profile_data = response.json()
-            print("\nDEBUG: Parsed profile details:")
-            print(json.dumps(profile_data, indent=2))
 
             options = profile_data.get('tmOptions', '').split()
             options = [x for x in options if 'tls' in x.lower()]
@@ -147,17 +93,23 @@ def get_ssl_profile_details(token, profile_name):
 
             details = {
                 'ciphers': profile_data.get('ciphers', 'DEFAULT'),
-                'options':  options
+                'options': options,
+                'cert': profile_data.get('cert', 'None'),
+                'key': profile_data.get('key', 'None'),
+                'chain': profile_data.get('chain', 'None')
             }
-            print("DEBUG: Extracted details:")
-            print(json.dumps(details, indent=2))
+
+            # Add server-specific fields if it's a server profile
+            if profile_type == 'server':
+                details.update({
+                    'authenticate': profile_data.get('authenticate', 'No'),
+                    'authenticateDepth': profile_data.get('authenticateDepth', 'N/A'),
+                    'caFile': profile_data.get('caFile', 'None')
+                })
+
             return details
-        else:
-            print("DEBUG: Failed to get profile details")
-            return None
     except Exception as e:
-        print("DEBUG: Exception in get_ssl_profile_details:")
-        print(str(e))
+        print("Error getting profile details: {0}".format(str(e)))
         return None
 
 
@@ -168,19 +120,43 @@ def generate_report(data):
             f.write("\nVirtual Server: {0}\n".format(vs_name))
             f.write("Description: {0}\n".format(vs_data.get('description', 'N/A')))
             f.write("IP Address: {0}\n".format(vs_data['ip']))
-            f.write("SSL Profiles:\n")
 
-            if not vs_data['ssl_profiles']:
-                f.write("  No SSL profiles found\n")
+            # Client SSL Profiles
+            f.write("\nClient SSL Profiles:\n")
+            if not vs_data['client_ssl_profiles']:
+                f.write("  No client SSL profiles found\n")
             else:
-                for profile in vs_data['ssl_profiles']:
+                for profile in vs_data['client_ssl_profiles']:
                     f.write("\n  Profile Name: {0}\n".format(profile['name']))
                     if profile['details']:
                         f.write("  Options: {0}\n".format(profile['details']['options']))
                         f.write("  Ciphers: {0}\n".format(profile['details']['ciphers']))
+                        f.write("  Certificate: {0}\n".format(profile['details']['cert']))
+                        f.write("  Key: {0}\n".format(profile['details']['key']))
+                        f.write("  Chain: {0}\n".format(profile['details']['chain']))
                     else:
                         f.write("  Unable to retrieve profile details\n")
-            f.write("\n" + "="*50 + "\n")
+
+            # Server SSL Profiles
+            f.write("\nServer SSL Profiles:\n")
+            if not vs_data['server_ssl_profiles']:
+                f.write("  No server SSL profiles found\n")
+            else:
+                for profile in vs_data['server_ssl_profiles']:
+                    f.write("\n  Profile Name: {0}\n".format(profile['name']))
+                    if profile['details']:
+                        f.write("  Options: {0}\n".format(profile['details']['options']))
+                        f.write("  Ciphers: {0}\n".format(profile['details']['ciphers']))
+                        f.write("  Certificate: {0}\n".format(profile['details']['cert']))
+                        f.write("  Key: {0}\n".format(profile['details']['key']))
+                        f.write("  Chain: {0}\n".format(profile['details']['chain']))
+                        f.write("  Authenticate: {0}\n".format(profile['details']['authenticate']))
+                        f.write("  Authentication Depth: {0}\n".format(profile['details']['authenticateDepth']))
+                        f.write("  CA File: {0}\n".format(profile['details']['caFile']))
+                    else:
+                        f.write("  Unable to retrieve profile details\n")
+
+            f.write("\n" + "=" * 50 + "\n")
 
 
 def main():
@@ -208,16 +184,26 @@ def main():
 
             vs_data[vs_name]['ip'] = ip
             vs_data[vs_name]['description'] = virtual.get('description', '')
-            vs_data[vs_name]['ssl_profiles'] = []
+            vs_data[vs_name]['client_ssl_profiles'] = []
+            vs_data[vs_name]['server_ssl_profiles'] = []
 
             # Get SSL profiles
             ssl_profiles = get_ssl_profiles(token, virtual)
-            print("Found {0} SSL profiles".format(len(ssl_profiles)))
 
-            for profile_name in ssl_profiles:
-                print("Getting details for profile: {0}".format(profile_name))
-                profile_details = get_ssl_profile_details(token, profile_name)
-                vs_data[vs_name]['ssl_profiles'].append({
+            # Process client SSL profiles
+            for profile_name in ssl_profiles['client']:
+                print("Getting details for client profile: {0}".format(profile_name))
+                profile_details = get_ssl_profile_details(token, profile_name, 'client')
+                vs_data[vs_name]['client_ssl_profiles'].append({
+                    'name': profile_name,
+                    'details': profile_details
+                })
+
+            # Process server SSL profiles
+            for profile_name in ssl_profiles['server']:
+                print("Getting details for server profile: {0}".format(profile_name))
+                profile_details = get_ssl_profile_details(token, profile_name, 'server')
+                vs_data[vs_name]['server_ssl_profiles'].append({
                     'name': profile_name,
                     'details': profile_details
                 })
@@ -228,6 +214,7 @@ def main():
 
     except Exception as e:
         print("Error: {0}".format(str(e)))
+
 
 if __name__ == "__main__":
     main()
