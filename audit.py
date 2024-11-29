@@ -161,7 +161,7 @@ def generate_report(data):
                         f.write("  Key: {0}\n".format(profile['details']['key']))
                         f.write("  Chain: {0}\n".format(profile['details']['chain']))
                         if profile['details']['cipher_details']:
-                            f.write("\n  Cipher Details:\n")
+                            f.write("\n  Enabled Protocols:\n")
                             # Indent each line of cipher details output
                             for line in profile['details']['cipher_details'].split('\n'):
                                 f.write("    {0}\n".format(line))
