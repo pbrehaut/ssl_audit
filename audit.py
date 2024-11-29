@@ -48,7 +48,7 @@ def get_cipher_details(cipher_string):
         output, error = process.communicate()
 
         if process.returncode == 0:
-            return output.strip()
+            return ','.join(set([x.split()[4] for x in [line.strip() for line in output.strip().splitlines()[1:]]]))
         else:
             return "Error running tmm command: {0}".format(error)
     except Exception as e:
