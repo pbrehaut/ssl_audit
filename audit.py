@@ -24,6 +24,102 @@ def get_auth_token(username, password):
         raise Exception("Authentication failed")
 
 
+def get_profile_statistics(token, profile_name):
+    """
+    Retrieve statistics for a specific SSL profile via the F5 iControl REST API.
+
+    Args:
+        token (str): Authentication token
+        profile_name (str): Name of the SSL profile
+
+    Returns:
+        dict: Statistics for SSL protocol versions usage
+    """
+    base_url = "https://localhost/mgmt/tm/ltm/profile"
+
+    headers = {
+        'X-F5-Auth-Token': token,
+        'Content-Type': 'application/json'
+    }
+
+    try:
+        client_url = "{0}/client-ssl/{1}/stats".format(base_url, profile_name.replace('/', '~'))
+        server_url = "{0}/server-ssl/{1}/stats".format(base_url, profile_name.replace('/', '~'))
+
+        response = requests.get(client_url, headers=headers, verify=False)
+
+        if response.status_code == 404:
+            response = requests.get(server_url, headers=headers, verify=False)
+
+        response.raise_for_status()
+
+        stats_data = response.json()
+
+        if 'entries' in stats_data:
+            # Keep the existing statistics dictionary for future use
+            profile_stats = {
+                'totalConnections': 0,
+                'currentConnections': 0,
+                'handshakeFailures': 0,
+                'sslFailures': 0,
+                'protocolErrors': 0,
+                'connectionMirroring': 0,
+                'peercertValid': 0,
+                'peercertInvalid': 0,
+                'currentActiveHandshakes': 0,
+                'currentPendingHandshakes': 0,
+                'decryptedBytesIn': 0,
+                'decryptedBytesOut': 0,
+                'encryptedBytesIn': 0,
+                'encryptedBytesOut': 0
+            }
+
+            # Initialize dictionary for protocol stats
+            protocol_stats = {}
+
+            # Extract statistics from the nested structure
+            entries = stats_data['entries'].items()[0][1]['nestedStats']['entries']
+
+            # Process all statistics (keeping for future use)
+            for key, value in entries.items():
+                if 'common.handshakeFailures' in key:
+                    profile_stats['handshakeFailures'] = value.get('value', 0)
+                elif 'common.curConns' in key:
+                    profile_stats['currentConnections'] = value.get('value', 0)
+                elif 'common.totConns' in key:
+                    profile_stats['totalConnections'] = value.get('value', 0)
+                elif 'common.sslFailures' in key:
+                    profile_stats['sslFailures'] = value.get('value', 0)
+                elif 'common.protocolErrors' in key:
+                    profile_stats['protocolErrors'] = value.get('value', 0)
+                elif 'common.currentActiveHandshakes' in key:
+                    profile_stats['currentActiveHandshakes'] = value.get('value', 0)
+                elif 'common.currentPendingHandshakes' in key:
+                    profile_stats['currentPendingHandshakes'] = value.get('value', 0)
+                elif 'common.decryptedBytesIn' in key:
+                    profile_stats['decryptedBytesIn'] = value.get('value', 0)
+                elif 'common.decryptedBytesOut' in key:
+                    profile_stats['decryptedBytesOut'] = value.get('value', 0)
+                elif 'common.encryptedBytesIn' in key:
+                    profile_stats['encryptedBytesIn'] = value.get('value', 0)
+                elif 'common.encryptedBytesOut' in key:
+                    profile_stats['encryptedBytesOut'] = value.get('value', 0)
+
+                # Extract protocol usage statistics
+                if key.startswith('common.protocolUses.'):
+                    protocol_name = key.split('.')[-1]
+                    protocol_stats[protocol_name] = value.get('value', 0)
+
+            # Return only the protocol statistics
+            return protocol_stats
+
+        else:
+            raise ValueError("Unexpected response format for profile {0}".format(profile_name))
+
+    except requests.exceptions.RequestException as e:
+        raise Exception("Failed to get statistics for profile {0}: {1}".format(profile_name, str(e)))
+
+
 def get_virtual_servers(token):
     """Get all enabled virtual servers"""
     url = "https://localhost/mgmt/tm/ltm/virtual"
@@ -168,6 +264,13 @@ def generate_report(data):
                     else:
                         f.write("  Unable to retrieve profile details\n")
 
+                    # Add protocol statistics
+                    if 'protocol_stats' in profile:
+                        f.write("\n  Protocol Usage Statistics:\n")
+                        for protocol, count in profile['protocol_stats'].items():
+                            if count > 0:  # Only show protocols that are actually being used
+                                f.write("    {0}: {1} connections\n".format(protocol.upper(), count))
+
             # Server SSL Profiles
             f.write("\nServer SSL Profiles:\n")
             if not vs_data['server_ssl_profiles']:
@@ -187,8 +290,14 @@ def generate_report(data):
                     else:
                         f.write("  Unable to retrieve profile details\n")
 
-            f.write("\n" + "=" * 50 + "\n")
+                    # Add protocol statistics
+                    if 'protocol_stats' in profile:
+                        f.write("\n  Protocol Usage Statistics:\n")
+                        for protocol, count in profile['protocol_stats'].items():
+                            if count > 0:  # Only show protocols that are actually being used
+                                f.write("    {0}: {1} connections\n".format(protocol.upper(), count))
 
+            f.write("\n" + "=" * 50 + "\n")
 
 def main():
     with open('creds.txt') as f:
@@ -221,23 +330,29 @@ def main():
             # Get SSL profiles
             ssl_profiles = get_ssl_profiles(token, virtual)
 
-            # Process client SSL profiles
-            for profile_name in ssl_profiles['client']:
-                print("Getting details for client profile: {0}".format(profile_name))
-                profile_details = get_ssl_profile_details(token, profile_name, 'client')
-                vs_data[vs_name]['client_ssl_profiles'].append({
-                    'name': profile_name,
-                    'details': profile_details
-                })
+        # In main(), replace these sections:
 
-            # Process server SSL profiles
-            for profile_name in ssl_profiles['server']:
-                print("Getting details for server profile: {0}".format(profile_name))
-                profile_details = get_ssl_profile_details(token, profile_name, 'server')
-                vs_data[vs_name]['server_ssl_profiles'].append({
-                    'name': profile_name,
-                    'details': profile_details
-                })
+        # For client SSL profiles:
+        for profile_name in ssl_profiles['client']:
+            print("Getting details for client profile: {0}".format(profile_name))
+            profile_details = get_ssl_profile_details(token, profile_name, 'client')
+            protocol_stats = get_profile_statistics(token, profile_name)
+            vs_data[vs_name]['client_ssl_profiles'].append({
+                'name': profile_name,
+                'details': profile_details,
+                'protocol_stats': protocol_stats
+            })
+
+        # For server SSL profiles:
+        for profile_name in ssl_profiles['server']:
+            print("Getting details for server profile: {0}".format(profile_name))
+            profile_details = get_ssl_profile_details(token, profile_name, 'server')
+            protocol_stats = get_profile_statistics(token, profile_name)
+            vs_data[vs_name]['server_ssl_profiles'].append({
+                'name': profile_name,
+                'details': profile_details,
+                'protocol_stats': protocol_stats
+            })
 
         # Generate report
         generate_report(vs_data)
