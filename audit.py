@@ -1,5 +1,4 @@
 import requests
-import json
 import getpass
 import urllib3
 from collections import defaultdict
@@ -237,7 +236,7 @@ def get_ssl_profile_details(token, profile_name, profile_type):
 
 def generate_report(data):
     """Generate report file"""
-    print(json.dumps(data, indent=4, sort_keys=True))
+    # print(json.dumps(data, indent=4, sort_keys=True))
     with open('ssl_profile_report.txt', 'w') as f:
         for vs_name, vs_data in data.items():
             f.write("\nVirtual Server: {0}\n".format(vs_name))
@@ -301,9 +300,9 @@ def generate_report(data):
             f.write("\n" + "=" * 50 + "\n")
 
 def main():
-    with open('creds.txt') as f:
-        username = f.readline().strip()
-        password = f.readline().strip()
+    # For Python 2
+    username = raw_input("Username: ")
+    password = getpass.getpass("Password: ")
     try:
         # Get authentication token
         token = get_auth_token(username, password)
