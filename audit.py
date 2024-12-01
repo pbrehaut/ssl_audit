@@ -182,7 +182,7 @@ def get_ssl_profiles(token, virtual_server):
                         check_response = requests.get(check_url, headers=headers, verify=False)
                         if check_response.status_code == 200:
                             profiles['server'].append(profile_full_path)
-
+        print(profiles)
         return profiles
 
     except Exception as e:
@@ -237,6 +237,7 @@ def get_ssl_profile_details(token, profile_name, profile_type):
 
 def generate_report(data):
     """Generate report file"""
+    print(json.dumps(data, indent=4, sort_keys=True))
     with open('ssl_profile_report.txt', 'w') as f:
         for vs_name, vs_data in data.items():
             f.write("\nVirtual Server: {0}\n".format(vs_name))
@@ -330,29 +331,27 @@ def main():
             # Get SSL profiles
             ssl_profiles = get_ssl_profiles(token, virtual)
 
-        # In main(), replace these sections:
+            # For client SSL profiles:
+            for profile_name in ssl_profiles['client']:
+                print("Getting details for client profile: {0}".format(profile_name))
+                profile_details = get_ssl_profile_details(token, profile_name, 'client')
+                protocol_stats = get_profile_statistics(token, profile_name)
+                vs_data[vs_name]['client_ssl_profiles'].append({
+                    'name': profile_name,
+                    'details': profile_details,
+                    'protocol_stats': protocol_stats
+                })
 
-        # For client SSL profiles:
-        for profile_name in ssl_profiles['client']:
-            print("Getting details for client profile: {0}".format(profile_name))
-            profile_details = get_ssl_profile_details(token, profile_name, 'client')
-            protocol_stats = get_profile_statistics(token, profile_name)
-            vs_data[vs_name]['client_ssl_profiles'].append({
-                'name': profile_name,
-                'details': profile_details,
-                'protocol_stats': protocol_stats
-            })
-
-        # For server SSL profiles:
-        for profile_name in ssl_profiles['server']:
-            print("Getting details for server profile: {0}".format(profile_name))
-            profile_details = get_ssl_profile_details(token, profile_name, 'server')
-            protocol_stats = get_profile_statistics(token, profile_name)
-            vs_data[vs_name]['server_ssl_profiles'].append({
-                'name': profile_name,
-                'details': profile_details,
-                'protocol_stats': protocol_stats
-            })
+            # For server SSL profiles:
+            for profile_name in ssl_profiles['server']:
+                print("Getting details for server profile: {0}".format(profile_name))
+                profile_details = get_ssl_profile_details(token, profile_name, 'server')
+                protocol_stats = get_profile_statistics(token, profile_name)
+                vs_data[vs_name]['server_ssl_profiles'].append({
+                    'name': profile_name,
+                    'details': profile_details,
+                    'protocol_stats': protocol_stats
+                })
 
         # Generate report
         generate_report(vs_data)
