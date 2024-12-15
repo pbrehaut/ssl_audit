@@ -209,7 +209,7 @@ def get_ssl_profile_details(token, profile_name, profile_type):
 
             # Get cipher details for client profiles
             ciphers = profile_data.get('ciphers', 'DEFAULT')
-            cipher_details = get_cipher_details(ciphers) if profile_type == 'client' else None
+            cipher_details = get_cipher_details(ciphers)
 
             details = {
                 'ciphers': ciphers,
@@ -287,6 +287,11 @@ def generate_report(data):
                         f.write("  Authenticate: {0}\n".format(profile['details']['authenticate']))
                         f.write("  Authentication Depth: {0}\n".format(profile['details']['authenticateDepth']))
                         f.write("  CA File: {0}\n".format(profile['details']['caFile']))
+                        if profile['details']['cipher_details']:
+                            f.write("\n  Enabled Protocols:\n")
+                            # Indent each line of cipher details output
+                            for line in profile['details']['cipher_details'].split('\n'):
+                                f.write("    {0}\n".format(line))
                     else:
                         f.write("  Unable to retrieve profile details\n")
 
