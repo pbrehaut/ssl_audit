@@ -4,6 +4,8 @@ import urllib3
 from collections import defaultdict
 import subprocess
 
+__version__ = '3.0'
+
 # Disable SSL warnings
 urllib3.disable_warnings()
 
