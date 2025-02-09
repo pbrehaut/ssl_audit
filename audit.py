@@ -235,74 +235,98 @@ def get_ssl_profile_details(token, profile_name, profile_type):
 
 
 def generate_report(data):
-    """Generate report file"""
-    # print(json.dumps(data, indent=4, sort_keys=True))
-    with open('ssl_profile_report.txt', 'w') as f:
+    """Generate report file in YAML format"""
+
+    def write_indented(f, content, indent_level=0):
+        """Helper function to write indented YAML content"""
+        indent = "  " * indent_level
+        f.write(indent + content + "\n")
+
+    def escape_yaml_value(value):
+        """Helper function to properly escape YAML values"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        # Force quoting if the value contains ! or :
+        if '!' in value or ':' in value:
+            # Replace any existing quotes first
+            value = value.replace('"', '\\"')
+            # Ensure the entire value is quoted
+            return '"{0}"'.format(value)
+        return value
+
+    with open('ssl_profile_report.yaml', 'w') as f:
+        write_indented(f, "virtual_servers:")
+
         for vs_name, vs_data in data.items():
-            f.write("\nVirtual Server: {0}\n".format(vs_name))
-            f.write("Description: {0}\n".format(vs_data.get('description', 'N/A')))
-            f.write("IP Address: {0}\n".format(vs_data['ip']))
+            # Virtual server details
+            write_indented(f, "- name: " + vs_name, 1)
+            write_indented(f, "description: " + str(vs_data.get('description', 'N/A')), 2)
+            write_indented(f, "ip_address: " + vs_data['ip'], 2)
 
             # Client SSL Profiles
-            f.write("\nClient SSL Profiles:\n")
+            write_indented(f, "client_ssl_profiles:", 2)
             if not vs_data['client_ssl_profiles']:
-                f.write("  No client SSL profiles found\n")
+                write_indented(f, "[]", 3)
             else:
                 for profile in vs_data['client_ssl_profiles']:
-                    f.write("\n  Profile Name: {0}\n".format(profile['name']))
+                    write_indented(f, "- name: " + profile['name'], 3)
                     if profile['details']:
-                        f.write("  Options: {0}\n".format(profile['details']['options']))
-                        f.write("  Ciphers: {0}\n".format(profile['details']['ciphers']))
-                        f.write("  Certificate: {0}\n".format(profile['details']['cert']))
-                        f.write("  Key: {0}\n".format(profile['details']['key']))
-                        f.write("  Chain: {0}\n".format(profile['details']['chain']))
-                        if profile['details']['cipher_details']:
-                            f.write("\n  Enabled Protocols:\n")
-                            # Indent each line of cipher details output
-                            for line in profile['details']['cipher_details'].split('\n'):
-                                f.write("    {0}\n".format(line))
-                    else:
-                        f.write("  Unable to retrieve profile details\n")
+                        write_indented(f, "options: " + escape_yaml_value(profile['details']['options']), 4)
+                        write_indented(f, "ciphers: " + escape_yaml_value(profile['details']['ciphers']), 4)
+                        write_indented(f, "certificate: " + profile['details']['cert'], 4)
+                        write_indented(f, "key: " + profile['details']['key'], 4)
+                        write_indented(f, "chain: " + profile['details']['chain'], 4)
 
-                    # Add protocol statistics
+                        if profile['details']['cipher_details']:
+                            write_indented(f, "enabled_protocols:", 4)
+                            for line in profile['details']['cipher_details'].split('\n'):
+                                if line.strip():  # Only write non-empty lines
+                                    write_indented(f, "- " + escape_yaml_value(line.strip()), 5)
+                    else:
+                        write_indented(f, "details: null  # Unable to retrieve profile details", 4)
+
+                    # Protocol statistics
                     if 'protocol_stats' in profile:
-                        f.write("\n  Protocol Usage Statistics:\n")
+                        write_indented(f, "protocol_usage_statistics:", 4)
                         for protocol, count in profile['protocol_stats'].items():
-                            if count > 0:  # Only show protocols that are actually being used
-                                f.write("    {0}: {1} connections\n".format(protocol.upper(), count))
+                            if count > 0:
+                                write_indented(f, "{0}: {1}".format(
+                                    protocol.upper(), count), 5)
 
             # Server SSL Profiles
-            f.write("\nServer SSL Profiles:\n")
+            write_indented(f, "server_ssl_profiles:", 2)
             if not vs_data['server_ssl_profiles']:
-                f.write("  No server SSL profiles found\n")
+                write_indented(f, "[]", 3)
             else:
                 for profile in vs_data['server_ssl_profiles']:
-                    f.write("\n  Profile Name: {0}\n".format(profile['name']))
+                    write_indented(f, "- name: " + profile['name'], 3)
                     if profile['details']:
-                        f.write("  Options: {0}\n".format(profile['details']['options']))
-                        f.write("  Ciphers: {0}\n".format(profile['details']['ciphers']))
-                        f.write("  Certificate: {0}\n".format(profile['details']['cert']))
-                        f.write("  Key: {0}\n".format(profile['details']['key']))
-                        f.write("  Chain: {0}\n".format(profile['details']['chain']))
-                        f.write("  Authenticate: {0}\n".format(profile['details']['authenticate']))
-                        f.write("  Authentication Depth: {0}\n".format(profile['details']['authenticateDepth']))
-                        f.write("  CA File: {0}\n".format(profile['details']['caFile']))
+                        write_indented(f, "options: " + escape_yaml_value(profile['details']['options']), 4)
+                        write_indented(f, "ciphers: " + escape_yaml_value(profile['details']['ciphers']), 4)
+                        write_indented(f, "certificate: " + profile['details']['cert'], 4)
+                        write_indented(f, "key: " + profile['details']['key'], 4)
+                        write_indented(f, "chain: " + profile['details']['chain'], 4)
+                        write_indented(f, "authenticate: " + str(profile['details']['authenticate']), 4)
+                        write_indented(f, "authentication_depth: " + str(profile['details']['authenticateDepth']), 4)
+                        write_indented(f, "ca_file: " + profile['details']['caFile'], 4)
+
                         if profile['details']['cipher_details']:
-                            f.write("\n  Enabled Protocols:\n")
-                            # Indent each line of cipher details output
+                            write_indented(f, "enabled_protocols:", 4)
                             for line in profile['details']['cipher_details'].split('\n'):
-                                f.write("    {0}\n".format(line))
+                                if line.strip():  # Only write non-empty lines
+                                    write_indented(f, "- " + escape_yaml_value(line.strip()), 5)
                     else:
-                        f.write("  Unable to retrieve profile details\n")
+                        write_indented(f, "details: null  # Unable to retrieve profile details", 4)
 
-                    # Add protocol statistics
+                    # Protocol statistics
                     if 'protocol_stats' in profile:
-                        f.write("\n  Protocol Usage Statistics:\n")
+                        write_indented(f, "protocol_usage_statistics:", 4)
                         for protocol, count in profile['protocol_stats'].items():
-                            if count > 0:  # Only show protocols that are actually being used
-                                f.write("    {0}: {1} connections\n".format(protocol.upper(), count))
+                            if count > 0:
+                                write_indented(f, "{0}: {1}".format(
+                                    protocol.upper(), count), 5)
 
-            f.write("\n" + "=" * 50 + "\n")
 
 def main():
     # For Python 2
@@ -359,7 +383,7 @@ def main():
 
         # Generate report
         generate_report(vs_data)
-        print("\nReport generated successfully as 'ssl_profile_report.txt'")
+        print("\nReport generated successfully as 'ssl_profile_report.yaml'")
 
     except Exception as e:
         print("Error: {0}".format(str(e)))
