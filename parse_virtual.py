@@ -3,6 +3,7 @@ from glob import glob
 from pathlib import Path
 import pandas as pd
 from datetime import datetime
+from collections import OrderedDict
 
 
 def parse_ssl_profile(data, device_name):
@@ -16,11 +17,24 @@ def parse_ssl_profile(data, device_name):
     Returns:
         dict: Flattened dictionary containing all relevant fields
     """
-    result = {
-        'device_name': device_name,
-        'name': data.get('name'),
-        'ip_address': data.get('ip_address')
-    }
+    # Initialize with base fields
+    result = OrderedDict([
+        ('device_name', device_name.replace("_ssl_profile_report", "")),
+        ('name', data.get('name')),
+        ('ip_address', data.get('ip_address')),
+        ('client_ssl_enabled_protocols', ''),
+        ('server_ssl_enabled_protocols', ''),
+        ('client_ssl_stats', ''),
+        ('server_ssl_stats', '')
+    ])
+
+    # Initialize possible SSL version fields
+    ssl_versions = ['tlsv1', 'tlsv1_1', 'tlsv1_2']
+    for version in ssl_versions:
+        result[f'client_ssl_{version}_usage'] = None
+
+    for version in ssl_versions:
+        result[f'server_ssl_{version}_usage'] = None
 
     # Process client SSL profiles
     if data.get('client_ssl_profiles'):
@@ -31,7 +45,9 @@ def parse_ssl_profile(data, device_name):
         stats = client_profile.get('protocol_usage_statistics')
         if stats and isinstance(stats, dict) and stats != 'none':
             for protocol, count in stats.items():
-                result[f'client_ssl_{protocol.lower()}_usage'] = count
+                field_name = f'client_ssl_{protocol.lower()}_usage'
+                if field_name in result:
+                    result[field_name] = count
         else:
             result['client_ssl_stats'] = 'none'
 
@@ -44,7 +60,9 @@ def parse_ssl_profile(data, device_name):
         stats = server_profile.get('protocol_usage_statistics')
         if stats and isinstance(stats, dict) and stats != 'none':
             for protocol, count in stats.items():
-                result[f'server_ssl_{protocol.lower()}_usage'] = count
+                field_name = f'server_ssl_{protocol.lower()}_usage'
+                if field_name in result:
+                    result[field_name] = count
         else:
             result['server_ssl_stats'] = 'none'
 
@@ -98,7 +116,7 @@ def export_to_excel(results, output_file=None):
         print("No results to export")
         return
 
-    # Create DataFrame
+    # Create DataFrame with ordered columns
     df = pd.DataFrame(results)
 
     # Generate filename if not provided
