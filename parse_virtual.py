@@ -1,6 +1,8 @@
 import yaml
 from glob import glob
 from pathlib import Path
+import pandas as pd
+from datetime import datetime
 
 
 def parse_ssl_profile(data, device_name):
@@ -84,11 +86,59 @@ def process_yaml_files(directory='data'):
     return all_results
 
 
+def export_to_excel(results, output_file=None):
+    """
+    Export results to an Excel file with proper formatting.
+
+    Args:
+        results (list): List of dictionaries containing SSL profile data
+        output_file (str): Optional output filename. If None, generates a timestamped filename
+    """
+    if not results:
+        print("No results to export")
+        return
+
+    # Create DataFrame
+    df = pd.DataFrame(results)
+
+    # Generate filename if not provided
+    if output_file is None:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_file = f'ssl_profiles_{timestamp}.xlsx'
+
+    # Create Excel writer object
+    with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+        # Write DataFrame to Excel
+        df.to_excel(writer, sheet_name='SSL Profiles', index=False)
+
+        # Get workbook and worksheet objects
+        workbook = writer.book
+        worksheet = writer.sheets['SSL Profiles']
+
+        # Auto-adjust column widths
+        for column in worksheet.columns:
+            max_length = 0
+            column = list(column)
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            worksheet.column_dimensions[column[0].column_letter].width = adjusted_width
+
+    print(f"Results exported to: {output_file}")
+    return output_file
+
+
 if __name__ == "__main__":
     # Process all YAML files and get results
     results = process_yaml_files()
 
-    # Optionally, you could save the results to a CSV file
-    import pandas as pd
-    df = pd.DataFrame(results)
-    df.to_csv('ssl_profiles.csv', index=False)
+    # Print summary
+    print(f"Processed {len(results)} virtual servers")
+
+    # Export to Excel
+    if results:
+        export_to_excel(results)
