@@ -88,14 +88,7 @@ if __name__ == "__main__":
     # Process all YAML files and get results
     results = process_yaml_files()
 
-    # Print results for verification
-    print(f"Processed {len(results)} virtual servers")
-    for result in results:
-        print("\nVirtual Server:")
-        for key, value in result.items():
-            print(f"{key}: {value}")
-
     # Optionally, you could save the results to a CSV file
-    # import pandas as pd
-    # df = pd.DataFrame(results)
-    # df.to_csv('ssl_profiles.csv', index=False)
+    import pandas as pd
+    df = pd.DataFrame(results)
+    df.to_csv('ssl_profiles.csv', index=False)
