@@ -17,11 +17,24 @@ def parse_ssl_profile(data, device_name):
     Returns:
         dict: Flattened dictionary containing all relevant fields
     """
+
+    if data['client_ssl_profiles']:
+        client_profile = data['client_ssl_profiles'][0]['name']  # Taking first profile
+    else:
+        client_profile = None
+    if data['server_ssl_profiles']:
+        server_profile = data['server_ssl_profiles'][0]['name']  # Taking first profile
+    else:
+        server_profile = None
+
+
     # Initialize with base fields
     result = OrderedDict([
         ('device_name', device_name.replace("_ssl_profile_report", "")),
         ('name', data.get('name')),
         ('ip_address', data.get('ip_address')),
+        ('client_ssl_profile', client_profile),
+        ('server_ssl_profile', server_profile),
         ('client_ssl_enabled_protocols', ''),
         ('server_ssl_enabled_protocols', ''),
         ('client_ssl_stats', ''),
