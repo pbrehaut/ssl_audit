@@ -26,8 +26,8 @@ def generate_openssl_command(ip: str, route_domain: str, tls_version: str) -> st
     return base_cmd
 
 
-def generate_commands(virtual_servers: List[Dict[str, Any]]) -> List[Tuple[str, str, List[str]]]:
-    """Generate both TMSH commands and OpenSSL test commands."""
+def generate_commands(virtual_servers: List[Dict[str, Any]]) -> List[Tuple[str, str, List[str], str, List[str]]]:
+    """Generate TMSH commands, OpenSSL test commands, and TMSH verification commands."""
     commands = []
     new_options = ['no-tlsv1', 'no-tlsv1.1']
 
@@ -50,6 +50,11 @@ def generate_commands(virtual_servers: List[Dict[str, Any]]) -> List[Tuple[str, 
                 tmsh_cmd = (f"modify ltm profile client-ssl {profile_name} "
                             f"options {{ {options_str} }}")
 
+                # Generate TMSH verification commands
+                tmsh_verify_cmds = [
+                    f"list ltm profile client-ssl {profile_name} options",
+                ]
+
                 # Generate OpenSSL test commands for each disabled TLS version
                 openssl_cmds = []
                 if 'no-tlsv1' in updated_options:
@@ -57,26 +62,33 @@ def generate_commands(virtual_servers: List[Dict[str, Any]]) -> List[Tuple[str, 
                 if 'no-tlsv1.1' in updated_options:
                     openssl_cmds.append(generate_openssl_command(ip, route_domain, "tls1_1"))
 
-                commands.append((tmsh_cmd, vs_name, openssl_cmds))
+                commands.append((tmsh_cmd, vs_name, openssl_cmds, profile_name, tmsh_verify_cmds))
 
     return commands
 
 
-def write_commands_to_file(commands: List[Tuple[str, str, List[str]]], output_file: str):
+def write_commands_to_file(commands: List[Tuple[str, str, List[str], str, List[str]]], output_file: str):
     """Write commands to output file."""
     with open(output_file, 'w') as f:
         f.write("# F5 TMSH Commands and Verification Tests:\n")
-        for tmsh_cmd, vs_name, openssl_cmds in commands:
+        for tmsh_cmd, vs_name, openssl_cmds, profile_name, tmsh_verify_cmds in commands:
             f.write(f"\n# Virtual Server: {vs_name}\n")
+            f.write(f"# SSL Profile: {profile_name}\n")
             f.write(f"# TMSH Command:\n")
             f.write(f"{tmsh_cmd}\n")
 
+            f.write("\n# TMSH Verification Commands:\n")
+            f.write("# Run these commands to verify the changes:\n")
+            for cmd in tmsh_verify_cmds:
+                f.write(f"{cmd}\n")
+
             if openssl_cmds:
-                f.write("\n# Verification Commands:\n")
+                f.write("\n# OpenSSL Verification Commands:\n")
                 f.write("# The following OpenSSL commands should fail after applying the changes:\n")
                 for cmd in openssl_cmds:
                     f.write(f"# {cmd}\n")
                 f.write("# Expected output should include: 'Connection refused' or 'Protocol version not supported'\n")
+            f.write("\n" + "=" * 80 + "\n")
 
 
 def process_yaml_file(input_file: str):
