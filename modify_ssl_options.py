@@ -56,8 +56,8 @@ def generate_commands(virtual_servers: List[Dict[str, Any]]) -> List[Tuple[str, 
                     openssl_cmds.append(generate_openssl_command(ip, route_domain, "tls1"))
                 if 'no-tlsv1.1' in updated_options:
                     openssl_cmds.append(generate_openssl_command(ip, route_domain, "tls1_1"))
-                if 'no-tlsv1.3' in updated_options:
-                    openssl_cmds.append(generate_openssl_command(ip, route_domain, "tls1_3"))
+                # if 'no-tlsv1.3' in updated_options:
+                #     openssl_cmds.append(generate_openssl_command(ip, route_domain, "tls1_3"))
 
                 commands.append((tmsh_cmd, vs_name, openssl_cmds))
 
